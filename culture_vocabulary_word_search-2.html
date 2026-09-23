@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Culture Vocabulary Word Search</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172746}
+.container{max-width:1200px;margin:30px auto;padding:20px}
+h1{text-align:center;font-size:42px;margin:0 0 10px}
+.intro{text-align:center;font-size:19px;color:#4b5563;margin:0 0 28px}
+.game{display:grid;grid-template-columns:minmax(500px,1.35fr) minmax(320px,.8fr);gap:28px}
+.card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 6px 24px rgba(20,40,70,.08)}
+#grid{display:grid;grid-template-columns:repeat(16,1fr);width:100%;max-width:720px;margin:auto;border:1px solid #cbd5e1;touch-action:none}
+.cell{aspect-ratio:1;border:1px solid #dbe2ea;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:clamp(11px,2vw,21px);cursor:pointer;user-select:none}
+.cell.selected{background:#b9d7ff}
+.cell.found{background:#8bd3a8;color:#12351f}
+h2{margin-top:0;font-size:27px}
+.meaning{padding:12px 0;border-bottom:1px solid #e5e7eb;line-height:1.35}
+.meaning:last-child{border-bottom:0}
+.meaning strong{display:block;font-size:17px;margin-bottom:3px}
+.words{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:22px}
+.word{padding:9px 10px;background:#eef3f9;border-radius:8px;font-weight:600}
+.word.done{text-decoration:line-through;background:#d8f3df}
+.controls{text-align:center;margin-top:18px}
+button{background:#172746;color:#fff;border:0;border-radius:9px;padding:11px 18px;font-weight:700;cursor:pointer}
+#status{font-weight:700;margin-top:11px}
+@media(max-width:850px){.game{grid-template-columns:1fr}h1{font-size:32px}.intro{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Culture Vocabulary Word Search</h1>
+<p class="intro">Find the culture-related words. Click and drag from the first letter to the last letter.</p>
+
+<div class="game">
+<section class="card">
+<div id="grid"></div>
+<div class="controls">
+<button onclick="resetGame()">Reset Game</button>
+<div id="status">0 / 10 words found</div>
+</div>
+<div class="words" id="wordList"></div>
+</section>
+
+<section class="card">
+<h2>Vocabulary &amp; Meanings</h2>
+<div id="meanings"></div>
+</section>
+</div>
+</div>
+
+<script>
+const size=16;
+
+const vocabulary=[
+["TRADITION","A belief, activity, or practice passed from one generation to another."],
+["CUSTOM","A traditional way of behaving or doing something in a society."],
+["HERITAGE","Traditions, buildings, and history passed down through generations."],
+["SOCIALNORMS","Accepted ways of behaving in a particular society."],
+["CULTURALIDENTITY","The feeling of belonging to a particular culture."],
+["DIVERSITY","The existence of many different cultures, ideas, or groups."],
+["RITUAL","A traditional ceremony or repeated action with cultural meaning."],
+["PRESERVE","To protect something so it continues to exist."],
+["GENERATIONAL","Related to different generations of people."],
+["ASSIMILATION","The process of adopting the culture of another group."]
+];
+
+const displayWords=["Tradition","Custom","Heritage","Social norms","Cultural identity","Diversity","Ritual","Preserve","Generational","Assimilation"];
+
+let board,placements,foundWords=new Set(),dragging=false,startCell=[],currentCells=[];
+
+function buildBoard(){
+ board=Array.from({length:size},()=>Array(size).fill(""));
+ placements={};
+ vocabulary.forEach(([word],row)=>{
+   const col=Math.floor((size-word.length)/2);
+   placements[word]=[];
+   for(let i=0;i<word.length;i++){
+     board[row][col+i]=word[i];
+     placements[word].push(`${row},${col+i}`);
+   }
+ });
+ const letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+ for(let r=0;r<size;r++)for(let c=0;c<size;c++)
+   if(!board[r][c])board[r][c]=letters[(r*7+c*11)%letters.length];
+}
+
+function render(){
+ const grid=document.getElementById("grid");
+ grid.innerHTML="";
+ for(let r=0;r<size;r++)for(let c=0;c<size;c++){
+   const cell=document.createElement("div");
+   cell.className="cell";
+   cell.textContent=board[r][c];
+   cell.dataset.r=r;cell.dataset.c=c;
+   cell.addEventListener("pointerdown",startDrag);
+   cell.addEventListener("pointerenter",moveDrag);
+   grid.appendChild(cell);
+ }
+ document.onpointerup=endDrag;
+
+ document.getElementById("wordList").innerHTML=displayWords.map((w,i)=>
+   `<div class="word ${foundWords.has(vocabulary[i][0])?"done":""}">${w}</div>`).join("");
+
+ document.getElementById("meanings").innerHTML=vocabulary.map((v,i)=>
+   `<div class="meaning"><strong>${displayWords[i]}</strong>${v[1]}</div>`).join("");
+
+ updateStatus();
+}
+
+function getCell(r,c){return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`)}
+
+function startDrag(e){
+ dragging=true;
+ startCell=[+this.dataset.r,+this.dataset.c];
+ currentCells=[this];
+ this.classList.add("selected");
+ e.preventDefault();
+}
+
+function moveDrag(e){
+ if(!dragging)return;
+ const end=[+this.dataset.r,+this.dataset.c];
+ const cells=lineCells(startCell,end);
+ document.querySelectorAll(".cell.selected").forEach(x=>x.classList.remove("selected"));
+ currentCells=cells.map(([r,c])=>getCell(r,c)).filter(Boolean);
+ currentCells.forEach(x=>x.classList.add("selected"));
+}
+
+function lineCells(a,b){
+ const r1=a[0],c1=a[1],r2=b[0],c2=b[1];
+ const dr=r2-r1,dc=c2-c1;
+ const steps=Math.max(Math.abs(dr),Math.abs(dc));
+ if(!(dr===0||dc===0||Math.abs(dr)===Math.abs(dc)))return[];
+ const sr=dr===0?0:dr/Math.abs(dr),sc=dc===0?0:dc/Math.abs(dc);
+ const out=[];
+ for(let i=0;i<=steps;i++)out.push([r1+sr*i,c1+sc*i]);
+ return out;
+}
+
+function endDrag(){
+ if(!dragging)return;
+ dragging=false;
+ const coords=currentCells.map(x=>`${x.dataset.r},${x.dataset.c}`);
+ for(const [word] of vocabulary){
+   if(foundWords.has(word))continue;
+   const target=placements[word];
+   if(same(coords,target)||same(coords,[...target].reverse())){
+     foundWords.add(word);
+     markFound();
+     currentCells=[];
+     updateStatus();
+     if(foundWords.size===vocabulary.length)
+       document.getElementById("status").textContent="🎉 Great job! You found all the words!";
+     return;
+   }
+ }
+ document.querySelectorAll(".cell.selected").forEach(x=>x.classList.remove("selected"));
+ currentCells=[];
+}
+
+function same(a,b){return a.length===b.length&&a.every((x,i)=>x===b[i])}
+
+function markFound(){
+ document.querySelectorAll(".cell.found").forEach(x=>x.classList.remove("found"));
+ for(const word of foundWords)
+   placements[word].forEach(p=>{
+     const [r,c]=p.split(",").map(Number);
+     getCell(r,c).classList.add("found");
+   });
+ document.querySelectorAll(".cell.selected").forEach(x=>x.classList.remove("selected"));
+ document.querySelectorAll(".word").forEach((el,i)=>
+   el.classList.toggle("done",foundWords.has(vocabulary[i][0])));
+}
+
+function updateStatus(){
+ document.getElementById("status").textContent=`${foundWords.size} / ${vocabulary.length} words found`;
+}
+
+function resetGame(){
+ foundWords=new Set();
+ buildBoard();
+ render();
+}
+
+buildBoard();
+render();
+</script>
+</body>
+</html>
